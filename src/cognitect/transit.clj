@@ -36,12 +36,12 @@
 
 (defn- transit-format
   "Converts a keyword to a TransitFactory$Format value."
-  [kw]
-  (TransitFactory$Format/valueOf
-   (str/join "_" (-> kw
-                     name
-                     str/upper-case
-                     (str/split #"-")))))
+  [type]
+  (case type
+    :json TransitFactory$Format/JSON
+    :msgpack TransitFactory$Format/MSGPACK
+    :json-verbose TransitFactory$Format/JSON_VERBOSE
+    (throw (ex-info "Type must be :json, :json-verbose or :msgpack" {:type type}))))
 
 (defn tagged-value
   "Creates a TaggedValue object."
@@ -136,12 +136,10 @@
    provided by transit-java."
   ([out type] (writer out type {}))
   ([^OutputStream out type {:keys [handlers]}]
-     (if (#{:json :json-verbose :msgpack} type)
-       (let [handler-map (if (instance? HandlerMapContainer handlers)
-                           (handler-map handlers)
-                           (merge default-write-handlers handlers))]
-         (Writer. (TransitFactory/writer (transit-format type) out handler-map)))
-       (throw (ex-info "Type must be :json, :json-verbose or :msgpack" {:type type})))))
+   (let [handler-map (if (instance? HandlerMapContainer handlers)
+                       (handler-map handlers)
+                       (merge default-write-handlers handlers))]
+     (Writer. (TransitFactory/writer (transit-format type) out handler-map)))))
 
 (defn write
   "Writes a value to a transit writer."
@@ -277,18 +275,16 @@
    as TaggedValues."
   ([in type] (reader in type {}))
   ([^InputStream in type {:keys [handlers default-handler]}]
-     (if (#{:json :json-verbose :msgpack} type)
-       (let [handler-map (if (instance? HandlerMapContainer handlers)
-                           (handler-map handlers)
-                           (merge default-read-handlers handlers))
-             reader (TransitFactory/reader (transit-format type)
-                                           in
-                                           handler-map
-                                           default-handler)]
-         (Reader. (.setBuilders ^ReaderSPI reader
-                                (map-builder)
-                                (list-builder))))
-       (throw (ex-info "Type must be :json, :json-verbose or :msgpack" {:type type})))))
+   (let [handler-map (if (instance? HandlerMapContainer handlers)
+                       (handler-map handlers)
+                       (merge default-read-handlers handlers))
+         reader (TransitFactory/reader (transit-format type)
+                                       in
+                                       handler-map
+                                       default-handler)]
+     (Reader. (.setBuilders ^ReaderSPI reader
+                            (map-builder)
+                            (list-builder))))))
 
 (defn read
   "Reads a value from a reader."
